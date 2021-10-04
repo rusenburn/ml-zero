@@ -145,7 +145,7 @@ class TicTacToeGame(Game):
     def _initialize_state(self):
         self._state = TicTacToeState(np.zeros((3, 3, 3), dtype=np.int))
 
-    def step(self, action) -> tuple[np.ndarray, float, bool, dict]:
+    def step(self, action) -> tuple[TicTacToeState, float, bool, dict]:
         new_state = self._state.move(action)
         done = new_state.is_game_over()
         reward = -new_state.game_result()

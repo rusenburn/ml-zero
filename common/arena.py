@@ -1,5 +1,7 @@
 from __future__ import annotations
 from abc import ABC,abstractclassmethod
+
+from torch.distributions.utils import probs_to_logits
 from common.network_wrappers import NNWrapper
 from common.nnmcts import NNMCTS
 from common.game import Game, State
@@ -33,6 +35,19 @@ class NNMCTSPlayer(Player):
         a = np.random.choice(len(probs),p=probs)
         return a
 
+class NNPlayer(Player):
+    def __init__(self,nn:NNWrapper) -> None:
+        super().__init__()
+        self.nn = nn
+    
+    def choose_action(self, state: State) -> int:
+        probs,v = self.nn.predict(state.to_obs())
+        legal_actions = state.get_legal_actions()
+        probs = [probs[a] if a in legal_actions else 0 for a in range(len(probs))]
+        probs_sum = float(sum(probs))
+        norm_probs = [x/probs_sum for x in probs]
+        action = np.random.choice(len(norm_probs),p=norm_probs)
+        return action
 
 class Arena():
     def __init__(self,player_1:Player,player_2:Player,game:Game,n_games=1,render=False) -> None:

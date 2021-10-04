@@ -17,7 +17,7 @@ class NNWrapper(ABC):
         super().__init__()
 
     @abstractmethod
-    def predict(self, observation:np.ndarray) -> Tuple[int, float]:
+    def predict(self, observation:np.ndarray) -> Tuple[np.ndarray, float]:
         '''
         takes a numpy array observation and returns an action and the evaluation 
         of that observation.
@@ -59,7 +59,7 @@ class TorchWrapper(NNWrapper):
     def __init__(self,nn:NNBase) -> None:
         super().__init__()
         self.nn = nn
-    def predict(self, observation) -> Tuple[int, float]:
+    def predict(self, observation) -> Tuple[np.ndarray, float]:
         log_probs: Tensor
         v: Tensor
         self.nn.eval()

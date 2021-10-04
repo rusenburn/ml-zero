@@ -212,7 +212,7 @@ class ConnectFourGame(Game):
         self._initialize_state()
         return self._state
 
-    def step(self, action) -> tuple[np.ndarray, float, bool, dict]:
+    def step(self, action) -> tuple[ConnectFourState, float, bool, dict]:
         new_state = self._state.move(action)
         done = new_state.is_game_over()
         reward = -new_state.game_result()
