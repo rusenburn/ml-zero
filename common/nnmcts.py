@@ -1,10 +1,10 @@
 import math
-from common.network_wrappers import TrainableWrapper
+from common.network_wrappers import NNWrapper
 from common.game import Game, State
 import numpy as np
 
 class NNMCTS():
-    def __init__(self,game:Game,nnet:TrainableWrapper,args) -> None:
+    def __init__(self,game:Game,nnet:NNWrapper,args) -> None:
         self.game:Game = game
         self.nnet = nnet
         self.args = args
@@ -65,8 +65,8 @@ class NNMCTS():
             self.search(state)
         # s = (*state.to_obs().flatten(),)
         s = state.to_short()
-        qs = [self.Qsa[(*s,a)] if (*s,a) in self.Qsa else 0 for a in range(self.game.n_actions)]
-        ps = self.Ps[s]
+        # qs = [self.Qsa[(*s,a)] if (*s,a) in self.Qsa else 0 for a in range(self.game.n_actions)]
+        # ps = self.Ps[s]
         counts = [self.Nsa[(*s,a)] if (*s,a)in self.Nsa else 0 for a in range(self.game.n_actions)]
         if temp == 0:
             bestAs = np.array(np.argwhere(counts == np.max(counts))).flatten()

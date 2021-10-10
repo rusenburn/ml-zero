@@ -2,11 +2,13 @@ from abc import ABC, abstractmethod
 import torch as T
 from torch.functional import Tensor
 from common.game import Game, State
-from common.networks import NNBase, SharedResNetworkTest
+from common.networks import NNBase
 from typing import List, Tuple
 import numpy as np
 import os
 from torch.nn.utils.clip_grad import clip_grad_norm_
+
+from common.utils import get_device
 
 class NNWrapper(ABC):
     '''
@@ -60,15 +62,16 @@ class TorchWrapper(NNWrapper):
         super().__init__()
         self.nn = nn
     def predict(self, observation) -> Tuple[np.ndarray, float]:
-        log_probs: Tensor
+        probs: Tensor
         v: Tensor
         self.nn.eval()
-        observation_t = T.tensor([observation], dtype=T.float32)
+        # TODO move to device
+        # Done
+        observation_t = T.tensor([observation], dtype=T.float32,device=get_device())
         with T.no_grad():
-            log_probs, v = self.nn(observation_t)
+            probs, v = self.nn(observation_t)
 
-        probs = T.exp(log_probs).numpy()[0]
-        return probs, v.data.cpu().numpy()[0]
+        return probs.data.cpu().numpy()[0], v.data.cpu().numpy()[0]
 
     def load_check_point(self, folder='tmp', file='nn'):
         path = None
@@ -117,16 +120,16 @@ class TorchTrainableNNWrapper(TorchWrapper,TrainableWrapper):
             for _ in range(batch_count):
                 sample_ids = np.random.randint(
                     len(examples), size=self.batch_size)
-                states = List[State]
+                states : List[State]
                 states, pis, vs = list(zip(*[examples[i] for i in sample_ids]))
                 obs = [i.to_obs() for i in states]
                 obs_t = T.tensor(obs, dtype=T.float32)
                 target_pis = T.tensor(pis, dtype=T.float32)
                 target_vs = T.tensor(vs, dtype=T.float32)
 
-                log_probs: Tensor
-                log_probs, out_v = self.nn(obs_t)
-                out_probs = log_probs.exp()
+                out_probs: Tensor
+                out_probs, out_v = self.nn(obs_t)
+                # out_probs = log_probs.exp()
                 l_pi = self._loss_pi(target_pis, out_probs)
                 l_v = self._loss_v(target_vs, out_v)
                 total_loss: Tensor = l_pi + l_v
@@ -142,11 +145,54 @@ class TorchTrainableNNWrapper(TorchWrapper,TrainableWrapper):
 
     def _loss_v(self, targets, outputs):
         return T.torch.sum((targets - outputs.view(-1)) ** 2) / targets.size()[0]
+
+class AIGame(Game,NNWrapper):
+    def __init__(self,game:Game,nn:NNBase) -> None:
+        super().__init__()
+        self._wrapper = TorchWrapper(nn)
+        self._game = game
+        self._starting_player = 0
     
-
-
-class TestResNetWrapper(TorchTrainableNNWrapper):
-    def __init__(self, game:Game,lr=0.00025, n_iterations=float('inf'),min_lr=1e-5) -> None:
-        self.nn = SharedResNetworkTest(
-            shape=game.observation_shape,n_actions=game.n_actions)
-        super().__init__(self.nn, lr=lr, n_epochs=10, batch_size=64, n_iterations=n_iterations, min_lr=min_lr)
+    def n_actions(self) -> int:
+        return self._game.n_actions
+    
+    def observation_shape(self) -> tuple:
+        return self._game.observation_shape
+    def reset(self) -> State:
+        state = self._game.reset()
+        if self._starting_player:
+            a = self._choose_action(state)
+            state,_,_,_ = self._game.step(a)
+        self._starting_player = 1-self._starting_player
+        return state
+    
+    def render(self) -> None:
+        self._game.render()
+    
+    def predict(self, observation: np.ndarray) -> Tuple[np.ndarray, float]:
+        return self._wrapper.predict(observation)
+    
+    def save_check_point(self, folder='tmp', file='nn') -> None:
+        return self._wrapper.save_check_point(folder,file)
+    
+    def load_check_point(self, folder='tmp', file='nn') -> None:
+        return self._wrapper.load_check_point(folder,file)
+    def step(self, action:int) -> Tuple[State, float, bool, dict]:
+        state,reward,done,info = self._game.step(action)
+        if done:
+            return state,reward,done,info
+        action = self._choose_action(state)
+        state_2 ,reward_2,done_2,info_2 = self._game.step(action)
+        reward -= reward_2
+        return state_2,reward,done_2,info_2
+        
+    def _choose_action(self, state: State) -> int:
+        # TODO use NN player instead
+        probs,_ = self._wrapper.predict(state.to_obs())
+        legal_actions = state.get_legal_actions()
+        probs = [probs[a] if a in legal_actions else 0 for a in range(len(probs))]
+        probs_sum = float(sum(probs))
+        norm_probs = [x/probs_sum for x in probs]
+        action = np.random.choice(len(norm_probs),p=norm_probs)
+        return action
+        

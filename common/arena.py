@@ -1,15 +1,16 @@
 from __future__ import annotations
-from abc import ABC,abstractclassmethod
+from abc import ABC,abstractmethod
 
-from torch.distributions.utils import probs_to_logits
-from common.network_wrappers import NNWrapper
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from common.network_wrappers import NNWrapper
 from common.nnmcts import NNMCTS
 from common.game import Game, State
 import numpy as np
 class Player(ABC):
     def __init__(self) -> None:
         pass
-    @abstractclassmethod
+    @abstractmethod
     def choose_action(self,state:State)->int:
         pass
 

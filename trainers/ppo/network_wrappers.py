@@ -2,6 +2,7 @@
 from typing import List, Tuple
 
 from torch.functional import Tensor
+from torch.optim.lr_scheduler import _LRScheduler
 from common.network_wrappers import NNWrapper
 import numpy as np
 import torch as T
@@ -10,29 +11,37 @@ from torch.nn.utils.clip_grad import clip_grad_norm_
 from common.networks import NNBase
 import os
 
+from common.utils import get_device
+
+
 class PPONNWrapper(NNWrapper):
-    def __init__(self, nn: NNBase, lr, policy_clip, epochs, n_workers, worker_steps, batch_size, gamma, gae_lambda, observation_shape) -> None:
+    def __init__(self, nn: NNBase, lr, policy_clip, n_iters, epochs, n_workers, worker_steps, batch_size, gamma, gae_lambda, observation_shape, min_lr) -> None:
         super().__init__()
         self.epochs = epochs
         self.nn = nn
-        self.n_workers = n_workers
-        self.worker_steps = worker_steps
-        self.gamma = gamma
-        self.gae_lambda = gae_lambda
-        self.batch_size = batch_size
+        self.n_workers: int = n_workers
+        self.worker_steps: int = worker_steps
+        self.gamma: float = gamma
+        self.gae_lambda: float = gae_lambda
+        self.batch_size: int = batch_size
         self.optimizer = T.optim.Adam(self.nn.parameters(), lr=lr)
-        self.policy_clip = policy_clip
+        self.policy_clip: float = policy_clip
         self.max_grad_norm = 0.5
-        self.scheduler = None
-        self.observation_shape = observation_shape
+        self.observation_shape: tuple = observation_shape
+
+        min_lr_ratio = min_lr / lr if min_lr < lr else 1
+        self.scheduler: _LRScheduler = T.optim.lr_scheduler.LambdaLR(
+            optimizer=self.optimizer,
+            lr_lambda=lambda step: max(1-step/n_iters, min_lr_ratio)
+        )
 
     def predict(self, observation: np.ndarray) -> Tuple[int, float]:
-        # action, value, log_probs = self.ppo_predict(observation)
         self.nn.eval()
         probs: Tensor
         v: Tensor
-        observation_t = T.tensor([observation], dtype=T.float32)
+        observation_t = T.tensor([observation], dtype=T.float32,device=get_device())
         # TODO send to device
+        # Done
         with T.no_grad():
             probs, v = self.nn(observation_t)
         return probs.data.cpu().numpy()[0], v.data.cpu().numpy()[0]
@@ -53,8 +62,9 @@ class PPONNWrapper(NNWrapper):
         probs: Tensor
         value: Tensor
         self.nn.eval()
-        observation_t = T.tensor([observation], dtype=T.float32)
-        # Move to device
+        observation_t = T.tensor([observation], dtype=T.float32,device=get_device())
+        # TODO Move to device
+        # Done
         probs, value = self.nn(observation_t)
         dist: Categorical = Categorical(probs)
         action_sample = dist.sample()
@@ -76,12 +86,14 @@ class PPONNWrapper(NNWrapper):
                 observations_batches, action_batches, log_probs_batches, value_batches)
 
             # TODO move values Tensor to device
-            values = T.tensor(values_arr.copy())
+            # Done
+            values = T.tensor(values_arr.copy(),device=get_device())
             for batch in batches:
                 # TODO move tensors to device
-                observations = T.tensor(states_arr[batch], dtype=T.float)
-                old_logprobs = T.tensor(log_probs_arr[batch])
-                actions = T.tensor(actions_arr[batch])
+                # Done
+                observations = T.tensor(states_arr[batch], dtype=T.float,device=get_device())
+                old_logprobs = T.tensor(log_probs_arr[batch],device=get_device())
+                actions = T.tensor(actions_arr[batch],device=get_device())
                 ##
                 probs: Tensor
                 critic_value: Tensor
@@ -128,16 +140,17 @@ class PPONNWrapper(NNWrapper):
                 for k in range(t, self.worker_steps-1):
                     current_reward = rewards[i][k] * alter * -1
                     current_val = values[i][k]
-                    next_val = values[i][k+1] *alter
-                    next_val = next_val *alter
+                    next_val = values[i][k+1] * alter
+                    next_val = next_val * alter
 
                     a_t += discount * (current_reward + self.gamma*next_val*(
                         1-int(dones[i][k])) - current_val)
                     discount *= self.gamma*self.gae_lambda
                     alter *= -1
                 advantages_arr[i][t] = a_t
-        advantages = T.tensor(advantages_arr.flatten().copy())
         # TODO move advantages to device
+        # Done
+        advantages = T.tensor(advantages_arr.flatten().copy(),device=get_device())
         return advantages
 
     def _prepare_batches(self):

@@ -9,7 +9,7 @@ class State(ABC):
         super().__init__()
 
     @abstractmethod
-    def get_legal_actions(self):
+    def get_legal_actions(self)->List[int]:
         '''
         Constructs a list of all
         possible actions from current state.
