@@ -40,8 +40,6 @@ class PPONNWrapper(NNWrapper):
         probs: Tensor
         v: Tensor
         observation_t = T.tensor([observation], dtype=T.float32,device=get_device())
-        # TODO send to device
-        # Done
         with T.no_grad():
             probs, v = self.nn(observation_t)
         return probs.data.cpu().numpy()[0], v.data.cpu().numpy()[0]
@@ -63,8 +61,6 @@ class PPONNWrapper(NNWrapper):
         value: Tensor
         self.nn.eval()
         observation_t = T.tensor([observation], dtype=T.float32,device=get_device())
-        # TODO Move to device
-        # Done
         probs, value = self.nn(observation_t)
         dist: Categorical = Categorical(probs)
         action_sample = dist.sample()
@@ -85,12 +81,8 @@ class PPONNWrapper(NNWrapper):
             states_arr, actions_arr, log_probs_arr, values_arr = self._reshape_batches(
                 observations_batches, action_batches, log_probs_batches, value_batches)
 
-            # TODO move values Tensor to device
-            # Done
             values = T.tensor(values_arr.copy(),device=get_device())
             for batch in batches:
-                # TODO move tensors to device
-                # Done
                 observations = T.tensor(states_arr[batch], dtype=T.float,device=get_device())
                 old_logprobs = T.tensor(log_probs_arr[batch],device=get_device())
                 actions = T.tensor(actions_arr[batch],device=get_device())
@@ -148,8 +140,6 @@ class PPONNWrapper(NNWrapper):
                     discount *= self.gamma*self.gae_lambda
                     alter *= -1
                 advantages_arr[i][t] = a_t
-        # TODO move advantages to device
-        # Done
         advantages = T.tensor(advantages_arr.flatten().copy(),device=get_device())
         return advantages
 

@@ -63,36 +63,37 @@ class PPO(TrainerBase):
             lr_lambda=lambda step: max(1-step/n_iters, self.min_lr_ratio))
         t_start = time.time()
         for i in range(n_iters):
-            self._collect_training_examples()
+            last_values = self._collect_training_examples()
             examples = self.memory.sample()
             self._train(examples)
             self.memory.reset()
             scheduler.step()
             if i and i % self.testing_intervals == 0:
                 win_ratio = self._pit(self.wrapper, old_copy, 100)
-                print(f'Win ratio vs old is {win_ratio:0.2f}%.')
+                print(f'Win ratio vs old is {win_ratio:0.0f}.')
                 if win_ratio < self.testing_threshold:
-                    # self.wrapper.load_check_point('tmp', 'old')
                     self.wrapper.nn.load_state_dict(old_state_dict)
                 elif win_ratio >= self.testing_threshold:
                     old_state_dict = self.wrapper.nn.state_dict()
                     old_copy.nn.load_state_dict(old_state_dict)
-                    # self.wrapper.save_check_point('tmp', 'old')
-                    # old_copy.load_check_point('tmp', 'old')
                 done_steps = self.all_batches_size * (i+1)
                 delta_time = time.time() - t_start
                 fps = done_steps // delta_time
                 print(f'fps is {fps}')
         return self.wrapper
 
-    def _collect_training_examples(self):
+    def _collect_training_examples(self)->np.ndarray:
         steps_per_env = self.all_batches_size // self.vec_envs.n_envs
         for i in range(steps_per_env):
             result = self._step(self.states)
             for j in range(len(result[0])):
                 self.memory.remember(
                     result[0][j], result[1][j], result[2][j], result[3][j], result[4][j], result[5][j])
-            self.states = result[6]
+            self.states:List[State] = result[6]
+        # last_obs = [state.to_obs() for state in self.states]
+        last_values = [self.wrapper.predict(state.to_obs())[1] for state in self.states]
+        last_values = np.array(last_values,dtype=np.float32)
+        return last_values
 
     def _step(self, states: List[State]) -> Tuple[List[np.ndarray], List[int], List[float], List[float], List[bool], List[State]]:
         observations, actions,  log_probs, values, rewards, dones = [], [], [], [], [], []
@@ -124,24 +125,20 @@ class PPO(TrainerBase):
         fraction = arena.brawl()
         return fraction
 
-    def _train(self, examples: List):
+    def _train(self, examples: List,last_values:np.ndarray):
         self.wrapper.nn.train()
         for _ in range(self.n_epochs):
             observations_batches, action_batches, log_probs_batches, value_batches, reward_batches, done_batches = examples
             advantages = self._calculate_advantages(
-                reward_batches, value_batches, done_batches)
+                reward_batches, value_batches, done_batches,last_values)
 
             batches = self._prepare_batches()
 
             states_arr, actions_arr, log_probs_arr, values_arr = self._reshape_batches(
                 observations_batches, action_batches, log_probs_batches, value_batches)
 
-            # TODO move values Tensor to device
-            # Done
             values = T.tensor(values_arr.copy(),device=get_device())
             for batch in batches:
-                # TODO move tensors to device
-                # Done
                 observations = T.tensor(states_arr[batch], dtype=T.float32,device=get_device())
                 old_logprobs = T.tensor(log_probs_arr[batch], dtype=T.float32,device=get_device())
                 actions = T.tensor(actions_arr[batch],device=get_device())
@@ -176,7 +173,7 @@ class PPO(TrainerBase):
                                     max_norm=self.max_grad_norm)
                 self.optimizer.step()
 
-    def _calculate_advantages(self, rewards: np.ndarray, values: np.ndarray, dones: np.ndarray):
+    def _calculate_advantages(self, rewards: np.ndarray, values: np.ndarray, dones: np.ndarray,last_values:np.ndarray):
         # For some reason it yields better result even though it is flawed
         advantages_arr = np.zeros(
             (self.n_workers, self.worker_steps), dtype=np.float32)
@@ -198,8 +195,6 @@ class PPO(TrainerBase):
                     alter *= -1
                 advantages_arr[i][t] = a_t
         # returns = advantages_arr + values
-        # TODO move advantages to device
-        # Done
         advantages = T.tensor(advantages_arr.flatten().copy(),device=get_device())
         return advantages
 
@@ -228,20 +223,23 @@ class PPO(TrainerBase):
         return observation_arr, actions_arr, log_probs_arr, values_arr
 
     
-    def _calculate_advantages_improved(self, rewards: np.ndarray, values: np.ndarray, dones: np.ndarray):
+    def _calculate_advantages_improved(self, rewards: np.ndarray, values: np.ndarray, dones: np.ndarray,last_values:np.ndarray):
         adv_arr = np.zeros(
-            (self.n_workers, self.worker_steps), dtype=np.float32)
+            (self.n_workers, self.worker_steps+1), dtype=np.float32)
         for i in range(self.n_workers):
-            for t in reversed(range(self.worker_steps-1)):
+            for t in reversed(range(self.worker_steps)):
                 current_reward = rewards[i][t]
                 current_val = values[i][t]
-                next_val = values[i][t+1] * -1
+                if t == self.worker_steps-1: # if last step for worker 
+                    next_val = last_values[i] * -1
+                else:
+                    next_val = values[i][t+1] * -1
                 delta = current_reward + (self.gamma * next_val * (1- int(dones[i][t]))) - current_val
                 adv_arr[i][t] = delta + (self.gamma*self.gae_lambda*adv_arr[i][t+1] * (1-int(dones[i][t]))) * -1
+        adv_arr = adv_arr[:,:-1]
         returns_arr:np.ndarray = adv_arr + values
         adv_arr:np.ndarray = (adv_arr - adv_arr.mean())/adv_arr.std() + 1e-8
-        # TODO move advantages to device
-        # Done
+
         advantages = T.tensor(adv_arr.flatten().copy(),device=get_device())
         returns = T.tensor(returns_arr.flatten().copy(),device=get_device())
         return advantages , returns

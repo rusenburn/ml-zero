@@ -57,14 +57,14 @@ def test_ppo():
         'numMCTSSims': 100
     })
     game = TicTacToeGame()
-    trainer = NewTrainer()
+    trainer = TicTacToePPOTrainer()
     nn_1 = trainer.wrapper
-    nn_1.load_check_point('tmp','pop3d')
+    nn_1.load_check_point('tmp','ppo_good')
     p1 = NNPlayer(nn_1)
     # p1 = Human()
-    trainer_2 = PastSelfTrainer()
+    trainer_2 = NewTrainer()
     nn_2 = trainer_2.wrapper
-    nn_2.load_check_point('tmp','tictactoe_past_self')
+    nn_2.load_check_point('tmp','pop3d')
     p2 = NNPlayer(nn_2)
     # nnet_2 = ResNetWrapper(game)
     # nnet_2.load_check_point('tmp','tic_zero')

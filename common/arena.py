@@ -1,18 +1,20 @@
 from __future__ import annotations
 from abc import ABC,abstractmethod
-
-from typing import TYPE_CHECKING
-if TYPE_CHECKING:
-    from common.network_wrappers import NNWrapper
 from common.nnmcts import NNMCTS
 from common.game import Game, State
 import numpy as np
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from common.network_wrappers import NNWrapper
 class Player(ABC):
     def __init__(self) -> None:
         pass
     @abstractmethod
     def choose_action(self,state:State)->int:
-        pass
+        '''
+        takes a state and returns an action
+        '''
+        
 
 class Human(Player):
     def __init__(self) -> None:
@@ -77,7 +79,7 @@ class Arena():
             player = players[current_player]
             a = player.choose_action(state)
             if a not in state.get_legal_actions():
-                print(f'player {current_player+1} choose wrong action {a}\n')
+                print(f'player {current_player+1} chose wrong action {a}\n')
                 continue
             new_state : State
             new_state , reward,done,info = self.game.step(a)

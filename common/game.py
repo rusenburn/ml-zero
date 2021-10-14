@@ -111,7 +111,7 @@ class SyncGameVec(GameVec):
     def __init__(self, environments: List[Game]) -> None:
         super().__init__()
         if not environments:
-            raise Exception("Argument environments cannot be None or Empty")
+            raise ValueError("Argument environments cannot be None or Empty")
         self._envs = [env for env in environments]
         self.n_enviroments = len(environments)
 
@@ -133,7 +133,7 @@ class SyncGameVec(GameVec):
 
     def step(self, actions: List[int]) -> Tuple[List[State],List[float],List[bool],List[dict]]:
         if len(actions) != len(self._envs):
-            raise Exception(
+            raise ValueError(
                 f"actions length are supposed to be equal to the number of environments ({len(self._envs)}).")
         new_states, rewards, dones, infos = [], [], [], []
         for act, env in zip(actions, self._envs):

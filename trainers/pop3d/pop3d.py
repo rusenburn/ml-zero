@@ -14,32 +14,27 @@ class POP3D(PPO):
         super().__init__(game_fns, nn, n_max_steps=n_max_steps, n_epochs=n_epochs, batch_size=batch_size, n_batches=n_batches, lr=lr, gamma=gamma,
                          gae_lambda=gae_lambda, policy_clip=0.2, testing_threshold=testing_threshold, testing_intervals=testing_intervals, min_lr=min_lr)
         self.beta = beta
-    def _train(self, examples: List):
+    def _train(self, examples: List,last_values:np.ndarray):
         self.wrapper.nn.train()
         for _ in range(self.n_epochs):
             observations_batches, action_batches, log_probs_batches, value_batches, reward_batches, done_batches = examples
             normalized_advatages,all_returns = self._calculate_advantages_improved(
-                reward_batches, value_batches, done_batches)
+                reward_batches, value_batches, done_batches,np.ndarray)
             batches = self._prepare_batches()
 
             states_arr, actions_arr, log_probs_arr, values_arr = self._reshape_batches(
                 observations_batches, action_batches, log_probs_batches, value_batches)
 
-            # TODO move values Tensor to device
-            # Done
             values = T.tensor(values_arr.copy(),device=get_device())
             states_tensor = T.tensor(states_arr,dtype=T.float32,device=get_device())
-            with T.no_grad:
+            with T.no_grad():
                 all_probs,_ = self.wrapper.nn(states_tensor)
             
             fixed_probs:Tensor = self.fix_probs(states_tensor,all_probs)
             for batch in batches:
-                # TODO move tensors to device
-                # Done
                 observations = T.tensor(states_arr[batch], dtype=T.float32,device=get_device())
                 old_logprobs = T.tensor(log_probs_arr[batch], dtype=T.float32,device=get_device())
                 actions = T.tensor(actions_arr[batch],device=get_device())
-                ##
                 probs: Tensor
                 critic_value: Tensor
                 probs, critic_value = self.wrapper.nn(observations)

@@ -11,7 +11,7 @@ class NNMCTS():
         self.visited = set()
         self.Qsa = {}  # stores Q values for s,a (as defined in the paper)
         self.Nsa = {}  # stores # times edge s,a was visited
-        self.Ns = {}  # stores #times board s was visited
+        self.Ns = {}  # stores # times board s was visited
         self.Ps = {}  # stores initial policy (returned by neural net)
 
         self.Es = {}  # stores game.getGameEnded ended for board s

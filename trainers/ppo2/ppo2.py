@@ -24,15 +24,11 @@ class PPO2(PPO):
             states_arr, actions_arr, log_probs_arr, values_arr = self._reshape_batches(
                 observations_batches, action_batches, log_probs_batches, value_batches)
 
-            # TODO move values Tensor to device
-            # Done
             values = T.tensor(values_arr.copy(),device=get_device())
             for batch in batches:
-                # TODO move tensors to device
                 observations = T.tensor(states_arr[batch], dtype=T.float32,device=get_device())
                 old_logprobs = T.tensor(log_probs_arr[batch], dtype=T.float32,device=get_device())
                 actions = T.tensor(actions_arr[batch],device=get_device())
-                ##
                 probs: Tensor
                 critic_value: Tensor
                 probs, critic_value = self.wrapper.nn(observations)

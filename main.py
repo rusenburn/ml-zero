@@ -28,7 +28,7 @@ def train_connect4_ppo():
     nnet.save_check_point('tmp','connect4_PPO')
 
 def train_past_self_ppo():
-    trainer = PastSelfTrainer(n_max_steps=1e5,n_epochs=4,batch_size=20,n_batches=4,lr=2.5e-4,testing_intervals=50)
+    trainer = PastSelfTrainer(n_max_steps=2e5,n_epochs=4,batch_size=20,n_batches=4,lr=2.5e-4,testing_intervals=50)
     nnet = trainer.train()
     nnet.save_check_point('tmp','tictactoe_past_self')
 if __name__ == '__main__':
@@ -36,6 +36,6 @@ if __name__ == '__main__':
     # train_connect4()
     # train_tic_gelu()
     # train_tictactoe_ppo()
-    train_tictactoe_pop3d()
+    # train_tictactoe_pop3d()
     # train_connect4_ppo()
-    # train_past_self_ppo()
+    train_past_self_ppo()

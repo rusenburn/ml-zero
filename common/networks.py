@@ -73,8 +73,6 @@ class SharedResNetwork(NNBase):
             nn.Linear(fc_dims, 1),
             nn.Tanh()
         )
-        # TODO send to device
-        # Done
         device = get_device()
         self._blocks.to(device)
         self._shared.to(device)

@@ -29,25 +29,21 @@ class PastSelfPPO(PPO):
             optimizer=self.optimizer,
             lr_lambda=lambda step: max(1-step/n_iters, self.min_lr_ratio))
         t_start = time.time()
-        self._collect_training_examples()
 
         for i in range(n_iters):
-            self._collect_training_examples()
+            last_values = self._collect_training_examples()
             examples = self.memory.sample()
-            self._train(examples)
+            self._train(examples,last_values)
             self.memory.reset()
             scheduler.step()
             if i and i % self.testing_intervals == 0:
                 win_ratio = self._pit(self.wrapper, old_copy, 100)
-                print(f'Win ratio vs old is {win_ratio:0.2f}%.')
+                print(f'Win ratio vs old is {win_ratio:0.2f}.')
                 if win_ratio < self.testing_threshold:
-                    # self.wrapper.load_check_point('tmp', 'old')
                     self.wrapper.nn.load_state_dict(old_state_dict)
                 elif win_ratio >= self.testing_threshold:
                     old_state_dict = self.wrapper.nn.state_dict()
-                    old_copy.load_check_point(old_state_dict)
-                    # self.wrapper.save_check_point('tmp', 'old')
-                    # old_copy.load_check_point('tmp', 'old')
+                    old_copy.nn.load_state_dict(old_state_dict)
 
                 done_steps = self.all_batches_size * (i+1)
                 delta_time = time.time() - t_start
@@ -74,17 +70,19 @@ class PastSelfPPO(PPO):
         next_copy.load_state_dict(state_dict)
         self._next_nn_idx +=1
     
-    def _calculate_advantages(self, rewards: np.ndarray, values: np.ndarray, dones: np.ndarray):
+    def _calculate_advantages(self, rewards: np.ndarray, values: np.ndarray, dones: np.ndarray,last_values:np.ndarray):
         adv_arr = np.zeros(
-            (self.n_workers, self.worker_steps), dtype=np.float32)
+            (self.n_workers, self.worker_steps+1), dtype=np.float32)
         for i in range(self.n_workers):
-            for t in reversed(range(self.worker_steps-1)):
+            for t in reversed(range(self.worker_steps)):
                 current_reward = rewards[i][t]
                 current_val = values[i][t]
-                next_val = values[i][t+1]
+                if t == self.worker_steps -1 :
+                    next_val = last_values[i]
+                else:
+                    next_val = values[i][t+1]
                 delta = current_reward + (self.gamma * next_val * (1- int(dones[i][t]))) - current_val
                 adv_arr[i][t] = delta + (self.gamma*self.gae_lambda*adv_arr[i][t+1] * (1-int(dones[i][t])))
-        # TODO Move to device
-        # Done
+        adv_arr = adv_arr[:,:-1]
         advantages = T.tensor(adv_arr.flatten().copy(),device=get_device())
         return advantages
